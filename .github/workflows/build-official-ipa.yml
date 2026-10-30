@@ -1,0 +1,84 @@
+name: Build official MeloNX IPA
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: 1
+  OFFICIAL_SOURCE: https://starforgejo.dev/projects/MeloNX.git
+  OFFICIAL_REVISION: 13700519f3abc4e6d7ed8a065b118b2cc59bcd67
+
+jobs:
+  build-ipa:
+    name: Build official MeloNX (unsigned)
+    runs-on: macos-26
+    timeout-minutes: 120
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the pinned official source
+        run: |
+          git clone --depth 1 --branch master "$OFFICIAL_SOURCE" source
+          test "$(git -C source rev-parse HEAD)" = "$OFFICIAL_REVISION"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: source/global.json
+
+      - name: Make dotnet visible to Xcode
+        run: sudo ln -sf "$(command -v dotnet)" /usr/local/bin/dotnet
+
+      - name: Select current Xcode
+        run: |
+          sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)/Contents/Developer"
+          xcodebuild -version
+
+      - name: Archive the complete official app
+        run: |
+          xcodebuild archive \
+            -project source/src/MeloNX/MeloNX.xcodeproj \
+            -scheme MeloNX \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath build/MeloNX.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone
+
+      - name: Verify official memory helper and direct-folder support
+        run: |
+          APP="build/MeloNX.xcarchive/Products/Applications/MeloNX.app"
+          test -d "$APP"
+          test -f "$APP/MeloNX"
+          test -d "$APP/PlugIns/MeloNXRamDonor.appex"
+          test -f "$APP/PlugIns/MeloNXRamDonor.appex/MeloNXRamDonor"
+          grep -Fq 'startAccessingSecurityScopedResource' source/src/MeloNX/MeloNX/Core/Extensions/RyujinxController+FilePicker.swift
+          grep -Fq 'com.apple.developer.kernel.increased-memory-limit' source/src/MeloNX/MeloNX/MeloNX.entitlements
+          git -C source rev-parse HEAD > build/official-source-commit.txt
+          printf '%s\n' "Unsigned build. Sign the complete IPA (including the embedded helper) before installing." > build/README.txt
+
+      - name: Package unsigned IPA
+        run: |
+          mkdir -p build/Payload
+          cp -R build/MeloNX.xcarchive/Products/Applications/MeloNX.app build/Payload/
+          (
+            cd build
+            zip -qry MeloNX-official-unsigned.ipa Payload
+          )
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: MeloNX-official-unsigned-ipa
+          path: |
+            build/MeloNX-official-unsigned.ipa
+            build/official-source-commit.txt
+            build/README.txt
+          if-no-files-found: error
