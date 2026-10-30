@@ -12,6 +12,10 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: 1
   OFFICIAL_SOURCE: https://starforgejo.dev/projects/MeloNX.git
   OFFICIAL_REVISION: 13700519f3abc4e6d7ed8a065b118b2cc59bcd67
+  LIBHAC_SOURCE: https://starforgejo.dev/archive/LibHac_Ryubing.git
+  LIBHAC_REVISION: 23e402ebb6dedc517e34a98a033078dc0f6fd478
+  LIBHAC_PACKAGE: Ryujinx.LibHac
+  LIBHAC_VERSION: 0.21.0-alpha.129
 
 jobs:
   build-ipa:
@@ -38,6 +42,27 @@ jobs:
         run: |
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)/Contents/Developer"
           xcodebuild -version
+
+      - name: Reconstruct the unavailable LibHac package from its pinned source
+        run: |
+          git clone "$LIBHAC_SOURCE" libhac
+          git -C libhac checkout --detach "$LIBHAC_REVISION"
+          test -z "$(git -C libhac status --porcelain)"
+          grep -Fq '<PackageId>Ryujinx.LibHac</PackageId>' libhac/src/LibHac/LibHac.csproj
+          grep -Fq 'TitleBlock' libhac/src/LibHac/Ns/ApplicationControlProperty.cs
+          (
+            cd libhac
+            dotnet run --project build/_build.csproj -- --target Codegen
+            dotnet run --project build/CodeGen/_buildCodeGen.csproj
+            dotnet test tests/LibHac.Tests/LibHac.Tests.csproj -c Release --filter 'FullyQualifiedName~LibHac.Tests.Ns.TypeLayoutTests'
+            dotnet pack src/LibHac/LibHac.csproj -c Release -o ../source/local-libhac-feed \
+              -p:PackageVersion="$LIBHAC_VERSION" \
+              -p:Version="$LIBHAC_VERSION" \
+              -p:InformationalVersion="$LIBHAC_VERSION+source.$LIBHAC_REVISION"
+          )
+          test -f "source/local-libhac-feed/$LIBHAC_PACKAGE.$LIBHAC_VERSION.nupkg"
+          perl -0pi -e "s#https://starforgejo.dev/api/packages/Ryulynx/nuget/index\\.json#$ENV{PWD}/source/local-libhac-feed#" source/nuget.config
+          grep -Fq "$PWD/source/local-libhac-feed" source/nuget.config
 
       - name: Build the official native core outside Xcode
         run: |
@@ -68,7 +93,7 @@ jobs:
             DEVELOPMENT_TEAM="" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone
 
-      - name: Verify official memory helper and direct-folder support
+      - name: Verify memory helper and direct HDD-folder linking
         run: |
           APP="build/MeloNX.xcarchive/Products/Applications/MeloNX.app"
           test -d "$APP"
@@ -76,10 +101,18 @@ jobs:
           test -d "$APP/PlugIns/MeloNXRamDonor.appex"
           test -f "$APP/PlugIns/MeloNXRamDonor.appex/MeloNXRamDonor"
           test -f "$APP/Frameworks/Ryujinx.Library.dylib"
-          grep -Fq 'startAccessingSecurityScopedResource' source/src/MeloNX/MeloNX/Core/Extensions/RyujinxController+FilePicker.swift
+          test -f source/src/MeloNX/MeloNX/Common/ROMFolders/RomFolderManager.swift
+          grep -Fq 'bookmarkData' source/src/MeloNX/MeloNX/Common/ROMFolders/RomFolderManager.swift
+          grep -Fq 'resolvingBookmarkData' source/src/MeloNX/MeloNX/Common/ROMFolders/RomFolderManager.swift
+          grep -Fq 'startAccessingSecurityScopedResource' source/src/MeloNX/MeloNX/Core/RyujinxController.swift
           grep -Fq 'com.apple.developer.kernel.increased-memory-limit' source/src/MeloNX/MeloNX/MeloNX.entitlements
           git -C source rev-parse HEAD > build/official-source-commit.txt
-          printf '%s\n' "Unsigned build. Sign the complete IPA (including the embedded helper) before installing." > build/README.txt
+          {
+            printf 'LibHac source: '; git -C libhac rev-parse HEAD
+            printf 'Package SHA-256: '; shasum -a 256 "source/local-libhac-feed/$LIBHAC_PACKAGE.$LIBHAC_VERSION.nupkg" | awk '{print $1}'
+            printf '%s\n' 'Reconstructed from matching source; this is not asserted byte-identical to the unavailable upstream package.'
+          } > build/libhac-source-receipt.txt
+          printf '%s\n' "Unsigned build. Sign the complete IPA, including its embedded helper, before installing." > build/README.txt
 
       - name: Package unsigned IPA
         run: |
@@ -96,5 +129,6 @@ jobs:
           path: |
             build/MeloNX-official-unsigned.ipa
             build/official-source-commit.txt
+            build/libhac-source-receipt.txt
             build/README.txt
           if-no-files-found: error
