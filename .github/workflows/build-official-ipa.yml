@@ -121,7 +121,7 @@ jobs:
           # This is an ad-hoc signature only: it carries the source entitlement
           # request into the IPA. The user's sideloading signer replaces it.
           codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP"
-          codesign -d --entitlements :- "$APP" 2> build/melonx-entitlement-request.plist
+          codesign -d --entitlements :- "$APP" > build/melonx-entitlement-request.plist 2>/dev/null
           /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.kernel.increased-memory-limit'             build/melonx-entitlement-request.plist | grep -Fxq true
 
       - name: Verify memory helper and direct HDD-folder linking
