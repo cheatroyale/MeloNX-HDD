@@ -110,6 +110,13 @@ jobs:
           PROJECT=source/src/MeloNX/MeloNX.xcodeproj/project.pbxproj
           perl -0pi -e 's{(4ED5D5182F80DD03007DB057 /\* Release \*/ = \{.*?SWIFT_OBJC_BRIDGING_HEADER = "MeloNX/Core/MeloNX-Bridging-Header\.h";\R)}{$1\t\t\t\tOTHER_SWIFT_FLAGS = "\$(inherited) -Xllvm -sil-disable-pass=early-inline";\n}s' "$PROJECT"
           grep -Fq 'OTHER_SWIFT_FLAGS = "$(inherited) -Xllvm -sil-disable-pass=early-inline";' "$PROJECT"
+          # Graphics statistics arrive through an external packed callback. Its
+          # final Double begins at byte 17, so a normal Swift load traps on ARM
+          # alignment. Read the unchanged bytes with an explicitly unaligned load.
+          STATS=source/src/MeloNX/MeloNX/Common/StatisticsHandler.swift
+          perl -0pi -e 's/ptr\.load\(fromByteOffset:/ptr.loadUnaligned(fromByteOffset:/g' "$STATS"
+          ! grep -Fq 'ptr.load(fromByteOffset:' "$STATS"
+          grep -Fq 'ptr.loadUnaligned(fromByteOffset: 17, as: Double.self)' "$STATS"
 
       - name: Make a device crash report available in Files
         run: |
