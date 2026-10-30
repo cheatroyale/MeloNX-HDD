@@ -100,6 +100,17 @@ jobs:
           ! grep -Fq 'registerSceneAccessory' "$APP"
           ! grep -Fq 'externalNonInteractive' "$APP"
 
+      - name: Make a device crash report available in Files
+        run: |
+          CRASH_HANDLER=source/src/MeloNX/MeloNX/Common/Exceptions/ExceptionHandler.swift
+          # The upstream handler normally writes its signal record in Caches,
+          # which cannot be retrieved from Files. This diagnostic copy keeps
+          # the same report but makes it visible in the app's Documents folder.
+          perl -0pi -e 's/\\.cachesDirectory/.documentDirectory/' "$CRASH_HANDLER"
+          perl -0pi -e 's/last_crash\\.log/MeloNX-crash.log/' "$CRASH_HANDLER"
+          grep -Fq '.documentDirectory' "$CRASH_HANDLER"
+          grep -Fq 'MeloNX-crash.log' "$CRASH_HANDLER"
+
       - name: Archive the complete official app
         run: |
           xcodebuild archive \
