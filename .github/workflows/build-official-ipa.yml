@@ -39,6 +39,21 @@ jobs:
           sudo xcode-select -s "$(ls -d /Applications/Xcode*.app | sort -V | tail -n 1)/Contents/Developer"
           xcodebuild -version
 
+      - name: Build the official native core outside Xcode
+        run: |
+          (
+            cd source
+            bash distribution/ios/build.sh
+          )
+          test -f source/src/Ryujinx.Library/bin/Release/net10.0/ios-arm64/native/Ryujinx.Library.dylib
+
+      - name: Avoid the Xcode 26 legacy-target crash
+        run: |
+          PROJECT=source/src/MeloNX/MeloNX.xcodeproj/project.pbxproj
+          perl -0pi -e 's/^\s*4EA2CB242FD924E000BE964F \/\* PBXTargetDependency \*\/,\R//m' "$PROJECT"
+          grep -Fq '4EC482D12F8D101B008C1955 /* Ryujinx.Library.dylib */' "$PROJECT"
+          ! grep -Fq '4EA2CB242FD924E000BE964F /* PBXTargetDependency */,' "$PROJECT"
+
       - name: Archive the complete official app
         run: |
           xcodebuild archive \
@@ -60,6 +75,7 @@ jobs:
           test -f "$APP/MeloNX"
           test -d "$APP/PlugIns/MeloNXRamDonor.appex"
           test -f "$APP/PlugIns/MeloNXRamDonor.appex/MeloNXRamDonor"
+          test -f "$APP/Frameworks/Ryujinx.Library.dylib"
           grep -Fq 'startAccessingSecurityScopedResource' source/src/MeloNX/MeloNX/Core/Extensions/RyujinxController+FilePicker.swift
           grep -Fq 'com.apple.developer.kernel.increased-memory-limit' source/src/MeloNX/MeloNX/MeloNX.entitlements
           git -C source rev-parse HEAD > build/official-source-commit.txt
