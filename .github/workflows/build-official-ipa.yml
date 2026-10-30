@@ -114,6 +114,16 @@ jobs:
             DEVELOPMENT_TEAM="" \
             SWIFT_OPTIMIZATION_LEVEL=-Onone
 
+      - name: Preserve the memory-entitlement request for personal-team resigning
+        run: |
+          APP="build/MeloNX.xcarchive/Products/Applications/MeloNX.app"
+          ENTITLEMENTS=source/src/MeloNX/MeloNX/MeloNX.entitlements
+          # This is an ad-hoc signature only: it carries the source entitlement
+          # request into the IPA. The user's sideloading signer replaces it.
+          codesign --force --sign - --entitlements "$ENTITLEMENTS" "$APP"
+          codesign -d --entitlements :- "$APP" 2> build/melonx-entitlement-request.plist
+          /usr/libexec/PlistBuddy -c 'Print :com.apple.developer.kernel.increased-memory-limit'             build/melonx-entitlement-request.plist | grep -Fxq true
+
       - name: Verify memory helper and direct HDD-folder linking
         run: |
           APP="build/MeloNX.xcarchive/Products/Applications/MeloNX.app"
@@ -133,7 +143,7 @@ jobs:
             printf 'Package SHA-256: '; shasum -a 256 "source/local-libhac-feed/$LIBHAC_PACKAGE.$LIBHAC_VERSION.nupkg" | awk '{print $1}'
             printf '%s\n' 'Reconstructed from matching source; this is not asserted byte-identical to the unavailable upstream package.'
           } > build/libhac-source-receipt.txt
-          printf '%s\n' "Unsigned build. Sign the complete IPA, including its embedded helper, before installing." > build/README.txt
+          printf '%s\n' "Unsigned for distribution but includes an ad-hoc memory-entitlement request. Apply the capability with iRAM, then re-sign and reinstall the complete IPA (including its embedded helper) with the same personal Apple account." > build/README.txt
 
       - name: Package unsigned IPA
         run: |
@@ -151,5 +161,6 @@ jobs:
             build/MeloNX-official-unsigned.ipa
             build/official-source-commit.txt
             build/libhac-source-receipt.txt
+            build/melonx-entitlement-request.plist
             build/README.txt
           if-no-files-found: error
