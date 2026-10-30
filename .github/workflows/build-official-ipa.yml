@@ -105,6 +105,11 @@ jobs:
           SETTINGS=source/src/MeloNX/MeloNX/UI/Main/Settings/NativeSettingsManager.swift
           perl -0pi -e 's/class Setting<T: Any>: Hashable, AnySettingProtocol/final class Setting<T: Any>: Hashable, AnySettingProtocol/' "$SETTINGS"
           grep -Fq 'final class Setting<T: Any>' "$SETTINGS"
+          # Scope the compiler-pass workaround to MeloNX. Applying it at the
+          # xcodebuild command line makes Swift package dependencies inherit it.
+          PROJECT=source/src/MeloNX/MeloNX.xcodeproj/project.pbxproj
+          perl -0pi -e 's{(4ED5D5182F80DD03007DB057 /\* Release \*/ = \{.*?SWIFT_OBJC_BRIDGING_HEADER = "MeloNX/Core/MeloNX-Bridging-Header\.h";\R)}{$1\t\t\t\tOTHER_SWIFT_FLAGS = "\$(inherited) -Xllvm -sil-disable-pass=early-inline";\n}s' "$PROJECT"
+          grep -Fq 'OTHER_SWIFT_FLAGS = "$(inherited) -Xllvm -sil-disable-pass=early-inline";' "$PROJECT"
 
       - name: Make a device crash report available in Files
         run: |
@@ -128,8 +133,7 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            DEVELOPMENT_TEAM="" \
-            OTHER_SWIFT_FLAGS='$(inherited) -Xllvm -sil-disable-pass=early-inline'
+            DEVELOPMENT_TEAM=""
 
       - name: Preserve the memory-entitlement request for personal-team resigning
         run: |
