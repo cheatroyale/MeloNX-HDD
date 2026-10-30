@@ -108,8 +108,8 @@ jobs:
           # Scope the compiler-pass workaround to MeloNX. Applying it at the
           # xcodebuild command line makes Swift package dependencies inherit it.
           PROJECT=source/src/MeloNX/MeloNX.xcodeproj/project.pbxproj
-          perl -0pi -e 's{(4ED5D5182F80DD03007DB057 /\* Release \*/ = \{.*?SWIFT_OBJC_BRIDGING_HEADER = "MeloNX/Core/MeloNX-Bridging-Header\.h";\R)}{$1\t\t\t\tOTHER_SWIFT_FLAGS = "\$(inherited) -Xllvm -sil-disable-pass=early-inline";\n}s' "$PROJECT"
-          grep -Fq 'OTHER_SWIFT_FLAGS = "$(inherited) -Xllvm -sil-disable-pass=early-inline";' "$PROJECT"
+          perl -0pi -e 's{(4ED5D5182F80DD03007DB057 /\* Release \*/ = \{.*?SWIFT_OBJC_BRIDGING_HEADER = "MeloNX/Core/MeloNX-Bridging-Header\.h";\R)}{$1\t\t\t\tOTHER_SWIFT_FLAGS = "\$(inherited) -Xllvm -sil-disable-pass=early-inline,inline";\n}s' "$PROJECT"
+          grep -Fq 'OTHER_SWIFT_FLAGS = "$(inherited) -Xllvm -sil-disable-pass=early-inline,inline";' "$PROJECT"
           # Graphics statistics arrive through an external packed callback. Its
           # final Double begins at byte 17, so a normal Swift load traps on ARM
           # alignment. Read the unchanged bytes with an explicitly unaligned load.
