@@ -61,7 +61,7 @@ jobs:
               -p:InformationalVersion="$LIBHAC_VERSION+source.$LIBHAC_REVISION"
           )
           test -f "source/local-libhac-feed/$LIBHAC_PACKAGE.$LIBHAC_VERSION.nupkg"
-          perl -0pi -e "s#https://starforgejo.dev/api/packages/Ryulynx/nuget/index\\.json#$ENV{PWD}/source/local-libhac-feed#" source/nuget.config
+          perl -0pi -e "s#https://starforgejo.dev/api/packages/Ryulynx/nuget/index\\.json#$PWD/source/local-libhac-feed#" source/nuget.config
           grep -Fq "$PWD/source/local-libhac-feed" source/nuget.config
 
       - name: Build the official native core outside Xcode
